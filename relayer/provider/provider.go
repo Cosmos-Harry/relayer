@@ -9,6 +9,7 @@ import (
 	"github.com/cometbft/cometbft/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/gogoproto/proto"
+	feetypes "github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
 	transfertypes "github.com/cosmos/ibc-go/v7/modules/apps/transfer/types"
 	clienttypes "github.com/cosmos/ibc-go/v7/modules/core/02-client/types"
 	conntypes "github.com/cosmos/ibc-go/v7/modules/core/03-connection/types"
@@ -395,6 +396,8 @@ type ChainProvider interface {
 	) error
 
 	MsgRegisterCounterpartyPayee(portID, channelID, relayerAddr, counterpartyPayeeAddr string) (RelayerMessage,error)
+	MsgRegisterPayee(portID, channelID, relayerAddr, payeeAddr string) (RelayerMessage,error)
+	MsgPayPacketFeeAsync(packetID chantypes.PacketId, packetFee feetypes.PacketFee) (RelayerMessage,error)
 	
 
 	ChainName() string

@@ -54,6 +54,9 @@ const (
 	flagDstClientID             = "dst-client-id"
 	flagSrcConnID               = "src-connection-id"
 	flagDstConnID               = "dst-connection-id"
+	flagRecvFee					= "recv-fee"
+	flagAckFee					= "ack-fee"
+	flagTimeoutFee				= "timeout-fee"
 )
 
 const (

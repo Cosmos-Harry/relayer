@@ -15,6 +15,7 @@ import (
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cometbft/cometbft/libs/bytes"
 	"github.com/cometbft/cometbft/light"
+	feetypes "github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
 	tmcrypto "github.com/cometbft/cometbft/proto/tendermint/crypto"
 	rpcclient "github.com/cometbft/cometbft/rpc/client"
 	coretypes "github.com/cometbft/cometbft/rpc/core/types"
@@ -2235,6 +2236,17 @@ func (cc *PenumbraProvider) SendMessagesToMempool(ctx context.Context, msgs []pr
 
 // MsgRegisterCounterpartyPayee creates an sdk.Msg to broadcast the counterparty address
 func (cc *PenumbraProvider) MsgRegisterCounterpartyPayee(portID, channelID, relayerAddr, counterpartyPayee string) (provider.RelayerMessage, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+// MsgRegisterPayee creates an sdk.Msg to broadcast the payee address
+func (cc *PenumbraProvider) MsgRegisterPayee(portID, channelID, relayerAddr, payeeAddr string) (provider.RelayerMessage, error) {
+	//TODO implement me
+	panic("implement me")
+}
+// NewMsgPayPacketAsync creates an sdk.Msg to broadcast the pay packet fee
+func (cc *PenumbraProvider) MsgPayPacketFeeAsync(packetID chantypes.PacketId, packetFee feetypes.PacketFee) (provider.RelayerMessage,error){
 	//TODO implement me
 	panic("implement me")
 }

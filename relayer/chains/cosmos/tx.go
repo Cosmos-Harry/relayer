@@ -1285,6 +1285,17 @@ func (cc *CosmosProvider) MsgRegisterCounterpartyPayee(portID, channelID, relaye
 	msg := feetypes.NewMsgRegisterCounterpartyPayee(portID, channelID, relayerAddr, counterpartyPayee)
 	return NewCosmosMessage(msg), nil
 }
+// MsgRegisterPayee creates an sdk.Msg to broadcast the payee address
+func (cc *CosmosProvider) MsgRegisterPayee(portID, channelID, relayerAddr, payeeAddr string) (provider.RelayerMessage, error) {
+	msg := feetypes.NewMsgRegisterPayee(portID, channelID, relayerAddr, payeeAddr)
+	return NewCosmosMessage(msg), nil
+}
+// NewMsgPayPacketAsync creates an sdk.Msg to broadcast the pay packet fee
+func (cc *CosmosProvider) MsgPayPacketFeeAsync(packetID chantypes.PacketId, packetFee feetypes.PacketFee) (provider.RelayerMessage,error){
+	msg := feetypes.NewMsgPayPacketFeeAsync(packetID,packetFee)
+	return NewCosmosMessage(msg),nil
+}
+
 
 // PrepareFactory mutates the tx factory with the appropriate account number, sequence number, and min gas settings.
 func (cc *CosmosProvider) PrepareFactory(txf tx.Factory) (tx.Factory, error) {

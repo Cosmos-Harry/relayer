@@ -4,11 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/avast/retry-go/v4"
+	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/client/flags"
+	"github.com/cosmos/cosmos-sdk/client/tx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	feetypes "github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
 	chantypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
 	"github.com/cosmos/relayer/v2/relayer"
 	"github.com/cosmos/relayer/v2/relayer/processor"
@@ -49,7 +54,10 @@ Most of these commands take a [path] argument. Make sure:
 		createChannelCmd(a),
 		closeChannelCmd(a),
 		lineBreakCommand(),
-		registerCounterpartyCmd(a),
+		registerCounterpartyPayeeCmd(a),
+		registerPayeeCmd(a),
+		payPacketFeeAsyncCmd(a),
+
 	)
 
 	return cmd
@@ -1039,16 +1047,16 @@ func ensureKeysExist(chains map[string]*relayer.Chain) error {
 	return nil
 }
 
-// MsgRegisterCounterpartyPayee registers the counterparty_payee
-func registerCounterpartyCmd(a *appState) *cobra.Command {
+// registerCounterpartyCmd registers the counterparty_payee.
+func registerCounterpartyPayeeCmd(a *appState) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "register-counterparty chain_name channel_id port_id relay_addr counterparty_payee",
 		Aliases: []string{"reg-cpt"},
 		Short:   "register the counterparty relayer address for ics-29 fee middleware",
 		Args:    withUsage(cobra.MatchAll(cobra.ExactArgs(5))),
 		Example: strings.TrimSpace(fmt.Sprintf(`
-$ %s register-counterparty channel-1 transfer cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk juno1g0ny488ws4064mjjxk4keenwfjrthn503ngjxd
-$ %s reg-cpt channel-1 cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk juno1g0ny488ws4064mjjxk4keenwfjrthn503ngjxd`,
+$ %s register-counterparty cosmoshub channel-1 transfer cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk juno1g0ny488ws4064mjjxk4keenwfjrthn503ngjxd
+$ %s reg-cpt cosmoshub channel-1 cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk juno1g0ny488ws4064mjjxk4keenwfjrthn503ngjxd`,
 			appName, appName)),
 		RunE: func(cmd *cobra.Command, args []string) error {
 
@@ -1072,5 +1080,120 @@ $ %s reg-cpt channel-1 cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk juno1g0ny48
 			return nil
 		},
 	}
+	return cmd
+}
+
+// registerPayeeCmd registers the payee.
+func registerPayeeCmd(a *appState) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "register-payee src_port src_channel port_id relay_addr payee",
+		Aliases: []string{"reg-payee"},
+		Short:   "register the payee relayer address for ics-29 fee middleware",
+		Args:    withUsage(cobra.MatchAll(cobra.ExactArgs(5))),
+		Example: strings.TrimSpace(fmt.Sprintf(`
+$ %s register-payee cosmoshub channel-1 transfer cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk juno1g0ny488ws4064mjjxk4keenwfjrthn503ngjxd
+$ %s reg-payee cosmoshub channel-1 cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk juno1g0ny488ws4064mjjxk4keenwfjrthn503ngjxd`,
+			appName, appName)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+
+			chain, ok := a.config.Chains[args[0]]
+			if !ok {
+				return errChainNotFound(args[0])
+			}
+
+			channelID := args[1]
+			portID := args[2]
+
+			relayerAddr := args[3]
+			payee := args[4]
+
+			msg, err := chain.ChainProvider.MsgRegisterPayee(portID, channelID, relayerAddr, payee)
+			if err != nil {
+				return err
+			}
+			res, success, err := chain.ChainProvider.SendMessage(cmd.Context(), msg, "")
+			fmt.Println(res, success, err)
+			return nil
+		},
+	}
+	return cmd
+}
+
+// payPacketFeeAsyncCmd returns the command to create a MsgPayPacketFeeAsync
+func payPacketFeeAsyncCmd(a *appState) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "pay-packet-fee src_port src_channel sequence",
+		Aliases: []string{"ppf"},
+		Short:   "Pay a fee to incentivize an existing IBC packet",
+		Args:    withUsage(cobra.MatchAll(cobra.ExactArgs(3))),
+		Example: strings.TrimSpace(fmt.Sprintf(`
+$ %s pay-packet-fee transfer channel-0 1 --recv-fee 10stake --ack-fee 10stake --timeout-fee 10stake`,
+			appName)),
+		RunE: func(cmd *cobra.Command, args []string) error {
+
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			// NOTE: specifying non-nil relayers is currently unsupported
+			var relayers []string
+
+			sender := clientCtx.GetFromAddress().String()
+			seq, err := strconv.ParseUint(args[2], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			packetID := chantypes.NewPacketID(args[0], args[1], seq)
+
+			recvFeeStr, err := cmd.Flags().GetString(flagRecvFee)
+			if err != nil {
+				return err
+			}
+
+			recvFee, err := sdk.ParseCoinsNormalized(recvFeeStr)
+			if err != nil {
+				return err
+			}
+
+			ackFeeStr, err := cmd.Flags().GetString(flagAckFee)
+			if err != nil {
+				return err
+			}
+
+			ackFee, err := sdk.ParseCoinsNormalized(ackFeeStr)
+			if err != nil {
+				return err
+			}
+
+			timeoutFeeStr, err := cmd.Flags().GetString(flagTimeoutFee)
+			if err != nil {
+				return err
+			}
+
+			timeoutFee, err := sdk.ParseCoinsNormalized(timeoutFeeStr)
+			if err != nil {
+				return err
+			}
+
+			fee := feetypes.Fee{
+				RecvFee:    recvFee,
+				AckFee:     ackFee,
+				TimeoutFee: timeoutFee,
+			}
+
+			packetFee := feetypes.NewPacketFee(fee, sender, relayers)
+			msg := feetypes.NewMsgPayPacketFeeAsync(packetID, packetFee)
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
+
+	cmd.Flags().String(flagRecvFee, "", "Fee paid to a relayer for relaying a packet receive.")
+	cmd.Flags().String(flagAckFee, "", "Fee paid to a relayer for relaying a packet acknowledgement.")
+	cmd.Flags().String(flagTimeoutFee, "", "Fee paid to a relayer for relaying a packet timeout.")
+	flags.AddTxFlagsToCmd(cmd)
+
 	return cmd
 }
