@@ -151,7 +151,7 @@ func TestScenarioFeeMiddleware(t *testing.T) {
 
 	// Incentivizing async packet by returning MsgPayPacketFeeAsync
 	packetFeeAsync := []string{
-		chainA.Config().Bin, "tx", "ibc-fee", "pay-packet-fee", "transfer", channelA.ChannelID, "1",
+		"tx", "pay-packet-fee", chainA.Config().Name, "transfer", channelA.ChannelID, "1",
 		"--recv-fee", fmt.Sprintf("1000%s", chainA.Config().Denom),
 		"--ack-fee", fmt.Sprintf("1000%s", chainA.Config().Denom),
 		"--timeout-fee", fmt.Sprintf("1000%s", chainA.Config().Denom),
@@ -163,7 +163,7 @@ func TestScenarioFeeMiddleware(t *testing.T) {
 		"--yes",
 		"--home", chainA.HomeDir(),
 	}
-	_, _, err = chainA.Exec(ctx, packetFeeAsync, nil)
+	_ = r.Exec(ctx, eRep, packetFeeAsync, nil)
 	require.NoError(t, err)
 
 	// start the relayer

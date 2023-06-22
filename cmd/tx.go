@@ -11,7 +11,6 @@ import (
 	"github.com/avast/retry-go/v4"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/flags"
-	"github.com/cosmos/cosmos-sdk/client/tx"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	feetypes "github.com/cosmos/ibc-go/v7/modules/apps/29-fee/types"
 	chantypes "github.com/cosmos/ibc-go/v7/modules/core/04-channel/types"
@@ -57,7 +56,6 @@ Most of these commands take a [path] argument. Make sure:
 		registerCounterpartyPayeeCmd(a),
 		registerPayeeCmd(a),
 		payPacketFeeAsyncCmd(a),
-
 	)
 
 	return cmd
@@ -1086,7 +1084,7 @@ $ %s reg-cpt cosmoshub channel-1 cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk j
 // registerPayeeCmd registers the payee.
 func registerPayeeCmd(a *appState) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "register-payee src_port src_channel port_id relay_addr payee",
+		Use:     "register-payee chain_name src_port src_channel port_id relay_addr payee",
 		Aliases: []string{"reg-payee"},
 		Short:   "register the payee relayer address for ics-29 fee middleware",
 		Args:    withUsage(cobra.MatchAll(cobra.ExactArgs(5))),
@@ -1122,14 +1120,19 @@ $ %s reg-payee cosmoshub channel-1 cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk
 // payPacketFeeAsyncCmd returns the command to create a MsgPayPacketFeeAsync
 func payPacketFeeAsyncCmd(a *appState) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "pay-packet-fee src_port src_channel sequence",
+		Use:     "pay-packet-fee chain_name src_port src_channel sequence",
 		Aliases: []string{"ppf"},
 		Short:   "Pay a fee to incentivize an existing IBC packet",
-		Args:    withUsage(cobra.MatchAll(cobra.ExactArgs(3))),
+		Args:    withUsage(cobra.MatchAll(cobra.ExactArgs(4))),
 		Example: strings.TrimSpace(fmt.Sprintf(`
-$ %s pay-packet-fee transfer channel-0 1 --recv-fee 10stake --ack-fee 10stake --timeout-fee 10stake`,
+$ %s pay-packet-fee cosmoshub transfer channel-0 1 --recv-fee 10stake --ack-fee 10stake --timeout-fee 10stake`,
 			appName)),
 		RunE: func(cmd *cobra.Command, args []string) error {
+
+			chain, ok := a.config.Chains[args[0]]
+			if !ok {
+				return errChainNotFound(args[0])
+			}
 
 			clientCtx, err := client.GetClientTxContext(cmd)
 			if err != nil {
@@ -1140,12 +1143,12 @@ $ %s pay-packet-fee transfer channel-0 1 --recv-fee 10stake --ack-fee 10stake --
 			var relayers []string
 
 			sender := clientCtx.GetFromAddress().String()
-			seq, err := strconv.ParseUint(args[2], 10, 64)
+			seq, err := strconv.ParseUint(args[3], 10, 64)
 			if err != nil {
 				return err
 			}
 
-			packetID := chantypes.NewPacketID(args[0], args[1], seq)
+			packetID := chantypes.NewPacketID(args[1], args[2], seq)
 
 			recvFeeStr, err := cmd.Flags().GetString(flagRecvFee)
 			if err != nil {
@@ -1184,9 +1187,14 @@ $ %s pay-packet-fee transfer channel-0 1 --recv-fee 10stake --ack-fee 10stake --
 			}
 
 			packetFee := feetypes.NewPacketFee(fee, sender, relayers)
-			msg := feetypes.NewMsgPayPacketFeeAsync(packetID, packetFee)
+			msg, err := chain.ChainProvider.MsgPayPacketFeeAsync(packetID, packetFee)
+			if err != nil {
+				return err
+			}
 
-			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+			res, success, err := chain.ChainProvider.SendMessage(cmd.Context(), msg, "")
+			fmt.Println(res, success, err)
+			return nil
 		},
 	}
 
